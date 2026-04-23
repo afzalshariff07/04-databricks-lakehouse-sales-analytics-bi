@@ -154,6 +154,7 @@ Raw Data → SQL Analysis → Dashboards → AI-driven Insights
 
 ## 📂 Repository Structure
 
+```
 databricks-lakehouse-sales-analytics/
 │
 ├── sql/
@@ -161,7 +162,7 @@ databricks-lakehouse-sales-analytics/
 ├── data-model/
 ├── genie-ai/
 └── README.md
-
+```
 ---
 
 ## 🎯 Key Learnings
