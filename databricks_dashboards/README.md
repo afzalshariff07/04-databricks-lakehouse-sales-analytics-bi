@@ -10,11 +10,19 @@ This folder contains exported dashboard definitions from Databricks.
 - Country-level analysis
 - KPI metrics (Sales, Orders, Customers, AOV)
 
+<p align="center">
+  <img src="databricks_dashboards/Sales_Performance_Dashboard.png" width="800"/>
+</p>
+
 ### Customer Insights Dashboard
 - Customer segmentation (VIP, Regular, New)
 - Customer behavior (recency, lifespan)
 - Top customers by revenue
 - Age group analysis
+
+<p align="center">
+  <img src="databricks_dashboards/Customer_Insights_Dashboard.png" width="800"/>
+</p>
 
 ## Notes
 - Dashboards are built using gold-layer datasets

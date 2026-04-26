@@ -38,7 +38,7 @@ Performed detailed exploratory analysis using Databricks SQL Editor:
 
 ---
 
-## 📊 Sales Dashboard
+## 📊 Sales Performance Dashboard
 
 ### Key Metrics:
 
@@ -58,11 +58,13 @@ Performed detailed exploratory analysis using Databricks SQL Editor:
 * Sales show clear monthly trends indicating seasonality
 * A few categories dominate overall revenue contribution
 
-📌 *(Add screenshot: /dashboards/sales_dashboard.png)*
+<p align="center">
+  <img src="databricks_dashboards/Sales_Performance_Dashboard.png" width="800"/>
+</p>
 
 ---
 
-## 👥 Customer Dashboard
+## 👥 Customer Insight Dashboard
 
 ### Key Metrics:
 
@@ -82,7 +84,9 @@ Performed detailed exploratory analysis using Databricks SQL Editor:
 * Adult age group drives the majority of orders
 * High-value customers can be targeted for retention strategies
 
-📌 *(Add screenshot: /dashboards/customer_dashboard.png)*
+<p align="center">
+  <img src="databricks_dashboards/Customer_Insights_Dashboard.png" width="800"/>
+</p>
 
 ---
 
