@@ -59,7 +59,7 @@ Performed detailed exploratory analysis using Databricks SQL Editor:
 * A few categories dominate overall revenue contribution
 
 <p align="center">
-  <img src="databricks_dashboards/Sales_Performance_Dashboard.jpg" width="800"/>
+  <img src="databricks_dashboards/images/Sales_Performance_Dashboard.jpg" width="800"/>
 </p>
 
 ---
@@ -85,7 +85,7 @@ Performed detailed exploratory analysis using Databricks SQL Editor:
 * High-value customers can be targeted for retention strategies
 
 <p align="center">
-  <img src="databricks_dashboards/Customer_Insights_Dashboard.jpg" width="800"/>
+  <img src="databricks_dashboards/images/Customer_Insights_Dashboard.jpg" width="800"/>
 </p>
 
 ---
