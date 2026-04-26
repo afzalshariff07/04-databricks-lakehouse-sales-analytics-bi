@@ -1,0 +1,1064 @@
+{
+  "datasets": [
+    {
+      "name": "comprehensive_sales",
+      "displayName": "Comprehensive Sales Analytics",
+      "queryLines": [
+        "WITH base_query AS (\n",
+        "  -- 1) Base Data with optimized joins\n",
+        "  SELECT\n",
+        "    f.order_number,\n",
+        "    f.order_date,\n",
+        "    f.sales_amount,\n",
+        "    f.quantity,\n",
+        "    f.customer_key,\n",
+        "    c.country,\n",
+        "    p.category,\n",
+        "    p.subcategory,\n",
+        "    p.product_name\n",
+        "  FROM\n",
+        "    gold.fact_sales f\n",
+        "      INNER JOIN gold.dim_customers c\n",
+        "        ON f.customer_key = c.customer_key\n",
+        "      INNER JOIN gold.dim_products p\n",
+        "        ON f.product_key = p.product_key\n",
+        "  WHERE\n",
+        "    f.order_date IS NOT NULL\n",
+        "),\n",
+        "aggregated AS (\n",
+        "  -- 2) Core Aggregation with pre-computed date\n",
+        "  SELECT\n",
+        "    DATE_TRUNC('month', order_date) AS order_month_date,\n",
+        "    DATE_FORMAT(order_date, 'MMM-yyyy') AS order_month,\n",
+        "    country,\n",
+        "    category,\n",
+        "    subcategory,\n",
+        "    product_name,\n",
+        "    COUNT(DISTINCT order_number) AS total_orders,\n",
+        "    COUNT(DISTINCT customer_key) AS total_customers,\n",
+        "    SUM(sales_amount) AS total_sales,\n",
+        "    SUM(quantity) AS total_quantity\n",
+        "  FROM\n",
+        "    base_query\n",
+        "  GROUP BY\n",
+        "    ALL\n",
+        "),\n",
+        "category_metrics AS (\n",
+        "  -- 3) Pre-compute category-level metrics once\n",
+        "  SELECT\n",
+        "    category,\n",
+        "    SUM(total_customers) AS category_total_customers,\n",
+        "    SUM(total_orders) AS category_total_orders\n",
+        "  FROM\n",
+        "    aggregated\n",
+        "  GROUP BY\n",
+        "    category\n",
+        "),\n",
+        "overall_metrics AS (\n",
+        "  -- 4) Pre-compute overall metrics once\n",
+        "  SELECT\n",
+        "    SUM(total_customers) AS overall_customers\n",
+        "  FROM\n",
+        "    aggregated\n",
+        "),\n",
+        "final AS (\n",
+        "  -- 5) Join pre-computed metrics efficiently\n",
+        "  SELECT\n",
+        "    a.*,\n",
+        "    CASE\n",
+        "      WHEN a.total_orders = 0 THEN 0\n",
+        "      ELSE a.total_sales / a.total_orders\n",
+        "    END AS avg_order_value,\n",
+        "    cm.category_total_customers,\n",
+        "    om.overall_customers,\n",
+        "    ROUND(\n",
+        "      (CAST(cm.category_total_customers AS DOUBLE) / om.overall_customers) * 100,\n",
+        "      2\n",
+        "    ) AS pct_customers_by_category,\n",
+        "    RANK() OVER (PARTITION BY a.order_month_date ORDER BY a.total_sales DESC) AS country_rank\n",
+        "  FROM\n",
+        "    aggregated a\n",
+        "      CROSS JOIN overall_metrics om\n",
+        "      LEFT JOIN category_metrics cm\n",
+        "        ON a.category = cm.category\n",
+        ")\n",
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  final\n",
+        "ORDER BY\n",
+        "  order_month_date"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "ac94c7f4",
+      "displayName": "Sales Analysis",
+      "layout": [
+        {
+          "widget": {
+            "name": "a7c72d46",
+            "multilineTextboxSpec": {
+              "lines": [
+                "> <span style=\"font-size: 12px;\">Executive view of revenue, customer, and product performance metrics</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Revenue",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_sales)",
+                  "style": {
+                    "fontSize": 24,
+                    "bold": true
+                  },
+                  "displayName": "sum(total_sales)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_orders",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "sum(total_orders)",
+                      "expression": "SUM(`total_orders`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Orders",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_orders)",
+                  "style": {
+                    "fontSize": 24,
+                    "bold": true
+                  },
+                  "displayName": "sum(total_orders)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 3,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "sum(total_customers)",
+                      "expression": "SUM(`total_customers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Customers",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_customers)",
+                  "style": {
+                    "fontSize": 24,
+                    "bold": true
+                  },
+                  "displayName": "sum(total_customers)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_aov",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "avg(avg_order_value)",
+                      "expression": "AVG(`avg_order_value`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Order Value",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(avg_order_value)",
+                  "style": {
+                    "fontSize": 24,
+                    "bold": true
+                  },
+                  "displayName": "avg(avg_order_value)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 3,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "revenue_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "order_month_date",
+                      "expression": "`order_month_date`"
+                    },
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Revenue Trend Over Time",
+                "showTitle": true
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "order_month_date",
+                  "axis": {
+                    "title": "Order Month"
+                  },
+                  "displayName": "order_month_date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_sales)",
+                  "displayName": "Total Sales",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "customer_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "order_month_date",
+                      "expression": "`order_month_date`"
+                    },
+                    {
+                      "name": "sum(total_customers)",
+                      "expression": "SUM(`total_customers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Customer Growth Over Time",
+                "showTitle": true
+              },
+              "widgetType": "area",
+              "encodings": {
+                "x": {
+                  "fieldName": "order_month_date",
+                  "displayName": "Order Month",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_customers)",
+                  "displayName": "Nr of Customers",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 6,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "insight_1",
+            "multilineTextboxSpec": {
+              "lines": [
+                "### Strategic Insights\n",
+                "\n",
+                "**Growth Trajectory:** Strong 6x revenue growth from 2011-2014 peak, followed by sharp decline requiring investigation of market disruption or operational changes.\n",
+                "\n",
+                "**Category Strategy:** Bikes drive revenue (high transaction value) while Accessories drive volume (59.64% of customers). Strategic focus: Use Accessories for customer acquisition, cross-sell Bikes to maximize lifetime value.\n",
+                "\n",
+                "**Geographic Risk:** United States shows concentrated high-revenue performance. Diversification opportunity exists in underperforming regions (Canada, Germany, France) to reduce market dependency."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 12,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_quantity",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "sum(total_quantity)",
+                      "expression": "SUM(`total_quantity`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Quantity Sold",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_quantity)",
+                  "style": {
+                    "fontSize": 24,
+                    "bold": true
+                  },
+                  "displayName": "sum(total_quantity)"
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "category_sales_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Category Performance",
+                "showTitle": true
+              },
+              "mark": {
+                "layout": "stack"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "category",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_sales)",
+                  "displayName": "Total Sales",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "category",
+                  "legend": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "country_sales_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top Countries by Revenue",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "country",
+                  "axis": {
+                    "hideTitle": true,
+                    "labelAngle": 90
+                  },
+                  "displayName": "country",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_sales)",
+                  "displayName": "Total Sales",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 12,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "product_performance_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "product_name",
+                      "expression": "`product_name`"
+                    },
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top Products by Revenue",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "product_name",
+                  "displayName": "Product Names",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_sales)",
+                  "displayName": "Total Sales",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "category",
+                  "displayName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 18,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_category_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_category",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "category_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Category",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "category",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_category"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_country_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_country",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "country_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Country",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "country",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_country"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_subcategory_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_subcategory",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "subcategory",
+                      "expression": "`subcategory`"
+                    },
+                    {
+                      "name": "subcategory_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Subcategory",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "subcategory",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_subcategory"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_date_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_order_month_date",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "order_month_date",
+                      "expression": "`order_month_date`"
+                    },
+                    {
+                      "name": "order_month_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Order Date Range",
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "order_month_date",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_order_month_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "global_filters",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "filter_category",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_category",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "category_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Category Filter",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "category",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_category"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_country",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_country",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "country",
+                      "expression": "`country`"
+                    },
+                    {
+                      "name": "country_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Country Filter",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "country",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_country"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_date",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_order_month_date",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "order_month_date",
+                      "expression": "`order_month_date`"
+                    },
+                    {
+                      "name": "order_month_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Order Date Range",
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "order_month_date",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_order_month_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "filter_subcategory",
+            "queries": [
+              {
+                "name": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_subcategory",
+                "query": {
+                  "datasetName": "comprehensive_sales",
+                  "fields": [
+                    {
+                      "name": "subcategory",
+                      "expression": "`subcategory`"
+                    },
+                    {
+                      "name": "subcategory_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Subcategory Filter",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "subcategory",
+                    "queryName": "dashboards/01f13ff7a91316f9b29bafb18a4049f7/datasets/01f140baec0715d7b9c8d82cac9aefbc_subcategory"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
