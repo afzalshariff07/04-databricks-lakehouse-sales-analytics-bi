@@ -1,0 +1,1191 @@
+{
+  "datasets": [
+    {
+      "name": "ba3bba31",
+      "displayName": "customer_insights_dataset",
+      "queryLines": [
+        "WITH base_query AS (\r\n",
+        "\r\n",
+        "-- 1) Base Data\r\n",
+        "SELECT\r\n",
+        "    f.order_number,\r\n",
+        "    f.product_key,\r\n",
+        "    f.order_date,\r\n",
+        "    f.sales_amount,\r\n",
+        "    f.quantity,\r\n",
+        "    c.customer_key,\r\n",
+        "    c.customer_number,\r\n",
+        "    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,\r\n",
+        "    c.birthdate,\r\n",
+        "    \r\n",
+        "    -- ✅ Correct Age Calculation\r\n",
+        "    FLOOR(DATEDIFF(current_date(), c.birthdate) / 365) AS age\r\n",
+        "\r\n",
+        "FROM gold.fact_sales f\r\n",
+        "LEFT JOIN gold.dim_customers c\r\n",
+        "ON f.customer_key = c.customer_key\r\n",
+        "\r\n",
+        "WHERE f.order_date IS NOT NULL\r\n",
+        "),\r\n",
+        "\r\n",
+        "customer_aggregation AS (\r\n",
+        "\r\n",
+        "-- 2) Customer Level Aggregation\r\n",
+        "SELECT \r\n",
+        "    customer_key,\r\n",
+        "    customer_number,\r\n",
+        "    customer_name,\r\n",
+        "    age,\r\n",
+        "\r\n",
+        "    COUNT(DISTINCT order_number) AS total_orders,\r\n",
+        "    SUM(sales_amount) AS total_sales,\r\n",
+        "    SUM(quantity) AS total_quantity,\r\n",
+        "    COUNT(DISTINCT product_key) AS total_products,\r\n",
+        "\r\n",
+        "    MAX(order_date) AS last_order_date,\r\n",
+        "\r\n",
+        "    -- ✅ Lifespan in months\r\n",
+        "    FLOOR(DATEDIFF(MAX(order_date), MIN(order_date)) / 30) AS lifespan\r\n",
+        "\r\n",
+        "FROM base_query\r\n",
+        "\r\n",
+        "GROUP BY\r\n",
+        "    customer_key,\r\n",
+        "    customer_number,\r\n",
+        "    customer_name,\r\n",
+        "    age\r\n",
+        ")\r\n",
+        "\r\n",
+        "-- 3) Final Output (Dashboard Ready)\r\n",
+        "SELECT\r\n",
+        "    customer_key,\r\n",
+        "    customer_number,\r\n",
+        "    customer_name,\r\n",
+        "    age,\r\n",
+        "\r\n",
+        "    -- ✅ Age Group\r\n",
+        "    CASE \r\n",
+        "        WHEN age < 20 THEN 'Under 20'\r\n",
+        "        WHEN age BETWEEN 20 AND 29 THEN '20-29'\r\n",
+        "        WHEN age BETWEEN 30 AND 39 THEN '30-39'\r\n",
+        "        WHEN age BETWEEN 40 AND 49 THEN '40-49'\r\n",
+        "        ELSE '50 and above'\r\n",
+        "    END AS age_group,\r\n",
+        "\r\n",
+        "    -- ✅ Customer Segment\r\n",
+        "    CASE \r\n",
+        "        WHEN lifespan >= 12 AND total_sales > 5000 THEN 'VIP'\r\n",
+        "        WHEN lifespan >= 12 AND total_sales <= 5000 THEN 'Regular'\r\n",
+        "        ELSE 'New'\r\n",
+        "    END AS customer_segment,\r\n",
+        "\r\n",
+        "    last_order_date,\r\n",
+        "\r\n",
+        "    -- ✅ Recency (months)\r\n",
+        "    FLOOR(DATEDIFF(current_date(), last_order_date) / 30) AS recency,\r\n",
+        "\r\n",
+        "    total_orders,\r\n",
+        "    total_sales,\r\n",
+        "    total_quantity,\r\n",
+        "    total_products,\r\n",
+        "    lifespan,\r\n",
+        "\r\n",
+        "    -- ✅ Avg Sales per Order\r\n",
+        "    CASE \r\n",
+        "        WHEN total_orders = 0 THEN 0\r\n",
+        "        ELSE total_sales / total_orders\r\n",
+        "    END AS avg_order_value,\r\n",
+        "\r\n",
+        "    -- ✅ Avg Monthly Spend\r\n",
+        "    CASE \r\n",
+        "        WHEN lifespan = 0 THEN total_sales\r\n",
+        "        ELSE total_sales / lifespan\r\n",
+        "    END AS avg_monthly_spend\r\n",
+        "\r\n",
+        "FROM customer_aggregation;"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "62a08b1d",
+      "displayName": "Executive Summary",
+      "layout": [
+        {
+          "widget": {
+            "name": "24d7cbdf",
+            "multilineTextboxSpec": {
+              "lines": [
+                "> <span style=\"font-size: 12px;\">Analysis of customer segments, spending patterns, and engagement metrics to identify high-value customers and inform retention strategies.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "total-customers",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "countdistinct(customer_key)",
+                      "expression": "COUNT(DISTINCT `customer_key`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Total Customers"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "countdistinct(customer_key)",
+                  "style": {
+                    "bold": true,
+                    "fontSize": 20
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-orders",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "sum(total_orders)",
+                      "expression": "SUM(`total_orders`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Total Orders"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_orders)",
+                  "style": {
+                    "bold": true,
+                    "fontSize": 20
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 3,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "avg-sales",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "avg(total_sales)",
+                      "expression": "AVG(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Avg Sales per Customer"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(total_sales)",
+                  "style": {
+                    "bold": true,
+                    "fontSize": 20
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "total-revenue",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Total Revenue"
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_sales)",
+                  "style": {
+                    "bold": true,
+                    "fontSize": 20
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "customers-by-age-group",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "age_group",
+                      "expression": "`age_group`"
+                    },
+                    {
+                      "name": "count(customer_key)",
+                      "expression": "COUNT(`customer_key`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Customer Distribution by Age Group",
+                "showDescription": true,
+                "description": "Which age group dominates your business?"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "age_group",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "displayName": "Age Group",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(customer_key)",
+                  "axis": {
+                    "title": "Nr. of Customers",
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "customer-segmentation",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "count(customer_key)",
+                      "expression": "COUNT(`customer_key`)"
+                    },
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "title": "Customer Segmentation",
+                "showDescription": true,
+                "description": "Are you dependent on few VIPs or broad base?"
+              },
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "count(customer_key)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "axis": {
+                    "hideTitle": true
+                  }
+                },
+                "color": {
+                  "fieldName": "customer_segment",
+                  "legend": {
+                    "hideTitle": true,
+                    "hide": false,
+                    "position": "right"
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "VIP",
+                        "Regular",
+                        "New"
+                      ]
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "revenue-by-segment",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    },
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": "Revenue Contribution by Customer Segment",
+                "description": "Which segment actually drives revenue?"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "customer_segment",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_sales)",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 9,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "d88ff48b",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "sum(total_sales)",
+                      "expression": "SUM(`total_sales`)"
+                    },
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showTitle": true,
+                "showDescription": true,
+                "title": "Top 10 High-Value Customers",
+                "description": "Who are your most valuable customers?"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(total_sales)",
+                  "axis": {
+                    "hideTitle": false,
+                    "title": "Total Sales"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "customer_name",
+                  "axis": {
+                    "hideTitle": true
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "categorySize": {
+                      "type": "number-of-categories",
+                      "number": 10
+                    },
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "96486ca3",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "avg(avg_monthly_spend)",
+                      "expression": "AVG(`avg_monthly_spend`)"
+                    },
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "showDescription": true,
+                "description": "How much Avg revenue each segment generates per month?",
+                "title": "Avg Monthly Spend by Segment",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "avg(avg_monthly_spend)",
+                  "axis": {
+                    "hideTitle": true,
+                    "hideLabels": true
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "customer_segment",
+                  "axis": {
+                    "hideTitle": true,
+                    "hideLabels": false
+                  },
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "orders-sales-scatter",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    },
+                    {
+                      "name": "total_orders",
+                      "expression": "`total_orders`"
+                    },
+                    {
+                      "name": "total_sales",
+                      "expression": "`total_sales`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Purchase Behavior: Orders vs Revenue",
+                "showTitle": true
+              },
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "total_orders",
+                  "axis": {
+                    "title": "Total Orders"
+                  },
+                  "displayName": "total_orders",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "total_sales",
+                  "axis": {
+                    "title": "Total Sales"
+                  },
+                  "displayName": "total_sales",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "customer_segment",
+                  "legend": {
+                    "title": "Customer Segment"
+                  },
+                  "displayName": "customer_segment",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 9,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "engagement-heatmap",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "avg(total_sales)",
+                      "expression": "AVG(`total_sales`)"
+                    },
+                    {
+                      "name": "lifespan",
+                      "expression": "`lifespan`"
+                    },
+                    {
+                      "name": "recency",
+                      "expression": "`recency`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Customer Engagement: Recency vs Lifespan",
+                "showTitle": true
+              },
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "lifespan",
+                  "axis": {
+                    "hideTitle": false,
+                    "title": "Lifespan"
+                  },
+                  "displayName": "lifespan",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "min": 0
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "recency",
+                  "axis": {
+                    "title": "Recency"
+                  },
+                  "displayName": "recency",
+                  "scale": {
+                    "type": "quantitative",
+                    "domain": {
+                      "max": 165
+                    }
+                  }
+                },
+                "color": {
+                  "fieldName": "avg(total_sales)",
+                  "legend": {
+                    "title": "Avg Sales"
+                  },
+                  "displayName": "avg(total_sales)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "customer-detail-table",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    },
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    },
+                    {
+                      "name": "total_sales",
+                      "expression": "`total_sales`"
+                    },
+                    {
+                      "name": "total_orders",
+                      "expression": "`total_orders`"
+                    },
+                    {
+                      "name": "avg_order_value",
+                      "expression": "`avg_order_value`"
+                    },
+                    {
+                      "name": "recency",
+                      "expression": "`recency`"
+                    },
+                    {
+                      "name": "lifespan",
+                      "expression": "`lifespan`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`total_sales` >= 3000"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "High-Value Customer Details",
+                "showTitle": true
+              },
+              "rowsPerPage": 25,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "customer_name",
+                    "displayName": "Customer Name"
+                  },
+                  {
+                    "fieldName": "customer_segment",
+                    "displayName": "Segment"
+                  },
+                  {
+                    "fieldName": "total_sales",
+                    "displayName": "Total Revenue"
+                  },
+                  {
+                    "fieldName": "total_orders",
+                    "displayName": "Orders"
+                  },
+                  {
+                    "fieldName": "avg_order_value",
+                    "displayName": "Avg Order Value"
+                  },
+                  {
+                    "fieldName": "recency",
+                    "displayName": "Recency (months)"
+                  },
+                  {
+                    "fieldName": "lifespan",
+                    "displayName": "Lifespan (months)"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 12,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_segment_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_customer_segment",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    },
+                    {
+                      "name": "customer_segment_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Customer Segment",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "customer_segment",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_customer_segment"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_age_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_age_group",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "age_group",
+                      "expression": "`age_group`"
+                    },
+                    {
+                      "name": "age_group_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Age Group",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "age_group",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_age_group"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 1,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "inline_date_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_last_order_date",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "last_order_date",
+                      "expression": "`last_order_date`"
+                    },
+                    {
+                      "name": "last_order_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Last Order Date",
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "last_order_date",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_last_order_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 1,
+            "width": 4,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "global_filters",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "segment_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_customer_segment",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "customer_segment",
+                      "expression": "`customer_segment`"
+                    },
+                    {
+                      "name": "customer_segment_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Customer Segment",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "customer_segment",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_customer_segment"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "age_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_age_group",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "age_group",
+                      "expression": "`age_group`"
+                    },
+                    {
+                      "name": "age_group_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Age Group",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "age_group",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_age_group"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "date_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_last_order_date",
+                "query": {
+                  "datasetName": "ba3bba31",
+                  "fields": [
+                    {
+                      "name": "last_order_date",
+                      "expression": "`last_order_date`"
+                    },
+                    {
+                      "name": "last_order_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Last Order Date Range",
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "last_order_date",
+                    "queryName": "dashboards/01f13fa0898d16c894b3424874ebe5d8/datasets/01f140b00c2316929eb284654ed8eb4b_last_order_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 0,
+            "width": 4,
+            "height": 3
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
