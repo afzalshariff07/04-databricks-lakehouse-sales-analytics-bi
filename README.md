@@ -238,3 +238,5 @@ His structured approach to teaching Databricks, SQL, dashboards and real-world a
 ## 📢 Connect With Me
 
 If you found this useful or want to collaborate, feel free to connect on LinkedIn.
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://www.linkedin.com/in/mohammed-afzal-shariff/)
